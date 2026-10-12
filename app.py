@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import streamlit as st
 
@@ -16,16 +17,19 @@ st.markdown(
 def build_compiler():
   """Compiles the Flex and Bison parser binary."""
   try:
-    # 1. Run Bison
+    # Ensure any previous custom header name is also available
+    # 1. Run Bison to generate y.tab.c and y.tab.h
     bison_res = subprocess.run(
-        ["bison", "-d", "-y", "parser.y", "-o", "y.tab.c"],
-        capture_output=True,
-        text=True,
+        ["bison", "-d", "-y", "parser.y"], capture_output=True, text=True
     )
     if bison_res.returncode != 0:
       return False, f"Bison Error:\n{bison_res.stderr}"
 
-    # 2. Run Flex
+    # Also create a copy as 22101869.tab.h just in case lexer.l still references it
+    if os.path.exists("y.tab.h"):
+      shutil.copy("y.tab.h", "22101869.tab.h")
+
+    # 2. Run Flex to generate lex.yy.c
     flex_res = subprocess.run(
         ["flex", "-o", "lex.yy.c", "lexer.l"],
         capture_output=True,
@@ -63,7 +67,7 @@ if not success:
 
 col_left, col_right = st.columns([1, 1])
 
-# Load sample from input.txt if present
+# Sample source code
 default_code = """int a, b, c;
 float x;
 
@@ -77,6 +81,7 @@ int main() {
     return 0;
 }
 """
+
 if os.path.exists("input.txt"):
   try:
     with open("input.txt", "r") as f:
@@ -114,7 +119,6 @@ with col_right:
       tabs = st.tabs(["Parser Log / Tokens", "Standard Output", "Errors"])
 
       with tabs[0]:
-        # Search for generated log/symbol files
         output_found = False
         for fname in ["log.txt", "parser_log.txt", "symbol_table.txt"]:
           if os.path.exists(fname):
@@ -126,13 +130,13 @@ with col_right:
           if result.stdout.strip():
             st.code(result.stdout, language="text")
           else:
-            st.info("Parsing completed without log output.")
+            st.info("Parsing completed.")
 
       with tabs[1]:
         if result.stdout.strip():
           st.code(result.stdout, language="text")
         else:
-          st.info("No standard console output.")
+          st.info("No console stdout.")
 
       with tabs[2]:
         if os.path.exists("error.txt") and os.path.getsize("error.txt") > 0:
